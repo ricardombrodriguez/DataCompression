@@ -1,4 +1,4 @@
-#include <iostream>
+ #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fstream>
@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <getopt.h>
+#include <math.h>
 
 using namespace std;
 
@@ -29,9 +30,11 @@ class CopyModel
 		*  structs
 		*/
 		ifstream file;
-		vector<char> alphabet;
-		multimap<string, char> sequences;
+		vector<char> file_buffer;			
+		multimap<string, int> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
+		map<char, int[2]> character_counters;					// Key-value pairs. Key: string sequence, Value: [Nh, Nf]. Keep track of Nh and Nf of the sequence lookahead character
 		int pointer;
+
 
 	public:
 		CopyModel(string filename, int k, float alpha, float threshold)
@@ -41,7 +44,7 @@ class CopyModel
 			this->k = k;
 			this->alpha = alpha;
 			this->threshold = threshold;
-			this->alphabet = {};
+			this->file_buffer = {};
 			this->pointer = 0;
 
 			this->file.open(filename);
@@ -54,10 +57,11 @@ class CopyModel
 			this->file.seekg(0, ios::beg);
 		}
 
-		void addToAlphabet(char ch)
-		{
-			this->alphabet.push_back(ch);
-		}
+		// void addToAlphabet(char ch)
+		// {
+		// 	this->alphabet.push_back(ch);
+		// }
+
 
 		/*
 		void processSequence(vector<char> sequence, char ch)
@@ -66,56 +70,80 @@ class CopyModel
 		}
 		*/
 
-		char get_next_character_prediction(pair<multimap<string, char>::iterator, multimap<string, char>::iterator> iterator, string key, int size)
+		char get_next_character_prediction(pair<multimap<string, int>::iterator, multimap<string, int>::iterator> iterator)
 		{
-			
-			char possible_characters[size];
-			char choosen_ch;
-			int i = 0;
+			//char chosen_ch = this->file_buffer[iterator.first->second + this->k];
+			char chosen_ch = this->file_buffer[iterator.first->second];
+			return chosen_ch;
 
-			cout << "possible characters: ";
-			for (auto itr = iterator.first; itr != iterator.second; ++itr) {
-				possible_characters[i] = itr->second;
-				cout << itr->second << ",";
+		}
+
+		/**
+		 * @brief Changes the lookahead character of the sequence by removing the first item on the list
+		 * 
+		 * @param seq 
+		 */
+		void replace_sequence_lookahead_character(string seq) 
+		{
+
+			if (this->sequences_lookahead.count(seq) > 1) {
+
+				auto it = this->sequences_lookahead.find(seq);
+				//int position_to_remove = it->second + this->k;
+				int position_to_remove = it->second;
+				char character_to_reset = this->file_buffer[position_to_remove];
+				this->character_counters[character_to_reset][0] = 0;
+				this->character_counters[character_to_reset][1] = 0;
+				this->sequences_lookahead.erase(it);
+				
 			}
-			cout << "\n" << endl;
 
-			srand(time(0)); // seed the random number generator with the current time
+		}
+
+		float calculate_probability(char ch)
+		{
+			int hits = this->character_counters[ch][0];
+			int fails = this->character_counters[ch][1];
 			
-			choosen_ch = possible_characters[rand() % size];
-
-			return choosen_ch;
-
+			return ((hits + this->alpha) / (hits + fails + 2 * this->alpha));
 		}
 
 		void start()
 		{
 
-			char ch;
+			char ch;		
+			char i;	
 			vector<char> sliding_window;
 			string seq;
-			int i;
 			char next_character;
 			char next_character_prevision;
 			int n_previous_encounters;
-			
-			int Nf = 0;
-			int Nh = 0;
+			int Nh = 0, Nf = 0;
+			float p_hit;
 
 			while (!this->file.eof()) {
 				
 				this->file.get(ch);
 
+				if (this->character_counters.count(ch) < 1) {
+					this->character_counters[ch][0] = 0;		// Initialize Nh & Nf for the new character
+					this->character_counters[ch][1] = 0;
+				}
+				
+				file_buffer.insert(file_buffer.begin() + pointer, ch);		// Add *ch* to file buffer in index/position *pointer*
+
 				sliding_window.push_back(ch);
+
 				if (sliding_window.size() == k)
 				{
-					for (char i: sliding_window)
-						cout << i;
+					
+					// for (char i: sliding_window)
+					// 	cout << i;
 					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);
 
 					string seq(sliding_window.begin(), sliding_window.end());
 
-					n_previous_encounters = this->sequences.count(seq);
+					n_previous_encounters = this->sequences_lookahead.count(seq);
 
 					if (!this->file.get(next_character)) {
 						// reached end of file before k characters
@@ -123,23 +151,40 @@ class CopyModel
 						break;
 					}
 
-					cout << "(" << next_character << ")\n" << endl;
+					//cout << "(" << next_character << ")\n" << endl;
 
 					//cout << seq;
 					if (n_previous_encounters > 0) {
 
-						next_character_prevision = get_next_character_prediction(this->sequences.equal_range(seq), seq, n_previous_encounters);
+						next_character_prevision = get_next_character_prediction(this->sequences_lookahead.equal_range(seq));
 						
-						//cout << "(((((()))))" << next_character_prevision << ")\n" << endl;
+						if (this->character_counters.count(next_character_prevision) < 1) {
+							this->character_counters[next_character_prevision][0] = 0;
+							this->character_counters[next_character_prevision][1] = 0;
+						}
 
-						if (next_character_prevision == next_character) Nh++;
-						else Nf++;
+						if (next_character_prevision == next_character) {
+							this->character_counters[next_character_prevision][0]++;	// character hits
+							Nh++;																												// overall hits
+						} else {			
+							cout << "Character: " << next_character << " | Predicted: " << next_character_prevision << endl;
+							this->character_counters[next_character_prevision][1]++;	// character fails
+							Nf++;																												// overall fails
+						}
 
-						//cout << "(" << next_character_prevision << ")";
+						// aualizar this->sequences_counters
+						p_hit = calculate_probability(next_character_prevision);
+
+						// Change lookahead character
+						if (p_hit < this->threshold) {
+							cout << "phit baixo, vou mudar o lookahead: " << endl;
+							replace_sequence_lookahead_character(seq);
+						}
+						
 					}
-					cout << endl;
+					//cout << endl;
 
-					this->sequences.insert({seq, next_character});
+					this->sequences_lookahead.insert({seq, this->pointer});
 
 				} 
 				
@@ -149,9 +194,14 @@ class CopyModel
 				
 			}
 
-			cout << "Nh = " << Nh << "\n";
-			cout << "Nf = " << Nf << "\n";
+		
+			float probability = ((float)Nh) / (Nh + Nf);
+			float n_bits = -log(probability)/log(2);
 
+			cout << "Nh = " << Nh << endl;
+			cout << "Nf = " << Nf << endl;
+			cout << "Probability " << probability << endl;
+			cout << "Bits = " << n_bits << endl;
 
 		}	
 };
