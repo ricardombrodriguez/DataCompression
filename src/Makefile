@@ -9,9 +9,9 @@ cpm_gen_OBJS = $(OBJS)
 all: cpm	cpm_gen
 
 cpm:	cpm.o $(cpm_OBJS)
-	$(CC) -o ../bin/cpm $^ -lm
+	$(CC) -o ../bin/cpm $^ -lm -g
 
 cpm_gen:	cpm_gen.o $(cpm_gen_OBJS)
-	$(CC) -o ../bin/cpm_gen $^ -lm
+	$(CC) -o ../bin/cpm_gen $^ -lm -g
 clean:
 	rm -rf *.o

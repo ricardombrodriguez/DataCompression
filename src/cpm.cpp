@@ -64,7 +64,24 @@ class CopyModel
 
 		char get_next_character_prediction(pair<multimap<string, char>::iterator, multimap<string, char>::iterator> iterator, string key, int size)
 		{
-			// get character after sequence
+			
+			char possible_characters[size];
+			char choosen_ch;
+			int i = 0;
+
+			cout << "possible characters: ";
+			for (auto itr = iterator.first; itr != iterator.second; ++itr) {
+				possible_characters[i] = itr->second;
+				cout << itr->second << ",";
+			}
+			cout << "\n" << endl;
+
+			srand(time(0)); // seed the random number generator with the current time
+			
+			choosen_ch = possible_characters[rand() % size];
+
+			return choosen_ch;
+
 		}
 
 		void start()
@@ -74,8 +91,9 @@ class CopyModel
 			vector<char> sliding_window;
 			string seq;
 			int i;
-			char lookahead_ch;
+			char next_character;
 			char next_character_prevision;
+			int n_previous_encounters;
 			
 			int Nf = 0;
 			int Nh = 0;
@@ -90,40 +108,46 @@ class CopyModel
 					for (char i: sliding_window)
 				    	cout << i;
 					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);
-				}
 
-				seq = str(sliding_window.begin(), sliding_window.end());
+					string seq(sliding_window.begin(), sliding_window.end());
 
-				n_previous_encounters = this->sequences.count(seq);
+					n_previous_encounters = this->sequences.count(seq);
 
-				if (!this->file.get(lookahead_ch)) {
-					// reached end of file before k characters
-					cerr << "Reached EOF" << endl;
-					break;
-				}
+					if (!this->file.get(next_character)) {
+						// reached end of file before k characters
+						cerr << "Reached EOF" << endl;
+						break;
+					}
 
-				cout << "(" << lookahead_ch << ")\n" << endl;
+					cout << "(" << next_character << ")\n" << endl;
 
-				cout << seq;
-				if (n_previous_encounters > 0) {
-					next_character_prevision = get_next_character_prediction(this->sequences.equal_range(seq), seq, n_previous_encounters);
-					
-					if (next_character_prevision == next_character) Nh++;
-					else Nf++;
+					//cout << seq;
+					if (n_previous_encounters > 0) {
 
-					cout << "(" << next_character_prevision << ")";
-				}
-				cout << endl;
+						next_character_prevision = get_next_character_prediction(this->sequences.equal_range(seq), seq, n_previous_encounters);
+						
+						//cout << "(((((()))))" << next_character_prevision << ")\n" << endl;
 
-				this->sequences.insert({seq, next_character});
+						if (next_character_prevision == next_character) Nh++;
+						else Nf++;
 
+						//cout << "(" << next_character_prevision << ")";
+					}
+					cout << endl;
 
+					this->sequences.insert({seq, next_character});
 
-
-
+				} 
+				
 				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)
+
+
 				
 			}
+
+			cout << "Nh = " << Nh << "\n";
+			cout << "Nf = " << Nf << "\n";
+
 		}
 };
 
