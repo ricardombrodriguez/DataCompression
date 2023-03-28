@@ -11,43 +11,43 @@
 
 using namespace std;
 
+#define NUM_THREADS 4
+
+// Mutex to protect shared variables
+pthread_mutex_t mutex;
+
+
 class CopyModel 
 {
 	private:
 		/**
 		*  params
 		*/
+		ifstream file;
 		int k;
-		int alpha;
+		float alpha;
 		float threshold;
-		const char *filename;
+		int n_threads;
+		int file_lenght;
 
 		/**
 		*  structs
 		*/
-		ifstream file;
 		vector<char> alphabet;
 		multimap<string, char> sequences;
 		int pointer;
-		int file_length;
-	
+
 	public:
-		CopyModel(const char *filename, int k, int alpha, float threshold)
+		CopyModel(ifstream file, int k, float alpha, float threshold, int n_threads, int file_lenght)
 		{
-			this->filename = filename;
+			this->file=file;
 			this->k = k;
 			this->alpha = alpha;
+			this->threshold = threshold;
+			this->n_threads = n_threads;
+			this->file_lenght = file_lenght;
 			this->alphabet = {};
 			this->pointer = 0;
-
-			this->file.open(filename);
-			if (!this->file .is_open()) {
-				cout << "[ERROR] Can't open file '" << filename << "'" << endl;
-				exit(EXIT_FAILURE);
-			}
-			this->file.seekg(0, ios::end);
-			this->file_length = this->file.tellg();
-			this->file.seekg(0, ios::beg);
 		}
 
 		void addToAlphabet(char ch)
@@ -86,6 +86,30 @@ class CopyModel
 
 		void start()
 		{
+
+			// Initialize mutex
+			pthread_mutex_init(&mutex, NULL);
+
+			// Create threads
+			vector<pthread_t> threads(this->n_threads);
+			vector<int> thread_ids(this->n_threads);
+			for (int i = 0; i < this->n_threads; i++) {
+				thread_ids[i] = i;
+				int rc = pthread_create(&threads[i], NULL, thread_func, (void*)&thread_ids[i]);
+				if (rc) {
+					cout << "Error:unable to create thread," << rc << endl;
+					exit(-1);
+				}
+			}
+
+			// Wait for threads to finish
+			for (int i = 0; i < this->n_threads; i++) {
+				pthread_join(threads[i], NULL);
+			}
+			
+			// Destroy mutex
+			pthread_mutex_destroy(&mutex);
+
 
 			char ch;
 			vector<char> sliding_window;
@@ -152,14 +176,120 @@ class CopyModel
 };
 
 
+Certainly, here's an example implementation in C++ using the pthread library:
+
+cpp
+Copy code
+#include <iostream>
+#include <fstream>
+#include <pthread.h>
+#include <vector>
+#include <cstring>
+
+using namespace std;
+
+// Number of threads to create
+#define NUM_THREADS 4
+
+// File to read from
+#define FILENAME "test.txt"
+
+// Mutex to protect shared variables
+pthread_mutex_t mutex;
+
+// Global variables
+int cur_pos = 0;
+int file_size = 0;
+char* file_buffer;
+
+// Function to be executed by each thread
+void* thread_func(void* arg) {
+
+    int thread_id = *(int*)arg;
+    int start_pos = (thread_id * file_size) / NUM_THREADS;
+    int end_pos = ((thread_id + 1) * file_size) / NUM_THREADS;
+
+    while (true) {
+        pthread_mutex_lock(&mutex);
+        if (cur_pos >= end_pos) {
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
+        int num_chars = min(end_pos - cur_pos, (int)strlen(file_buffer + cur_pos));
+        cur_pos += num_chars;
+        pthread_mutex_unlock(&mutex);
+
+        // Process the characters
+        for (int i = 0; i < num_chars; i++) {
+            cout << "Thread " << thread_id << " processing character: " << file_buffer[cur_pos - num_chars + i] << endl;
+        }
+    }
+    pthread_exit(NULL);
+}
+
 
 int main(int argc, char **argv) {
 	
 	// Command line arguments
-	const char *filename = argv[1];						// file to predict and compare
-	int k = atoi(argv[2]);						// size of the sliding window
+	char *filename; 								// file to predict and compare
+	int k;											// size of the sliding window
+	float alpha;									// alpha value for probability
+	int n_threads = NUM_THREADS;					// number of threads
+	float threshold;								// probability threshold
 
-	CopyModel cp(filename, k, 0.1, 0.5);
+
+	int opt;
+    while ((opt = getopt(argc, argv, "f:k:t:")) != -1) {
+        switch (opt) {
+            case 'f':
+                filename = string(optarg);
+                break;
+            case 'k':
+                k = atoi(optarg);
+				if (k  < 1) {		
+					cout << "[ERROR] Sliding window size must be greater than zero.\n" << endl;
+					exit(EXIT_FAILURE);
+				}
+                break;
+			case 'a':
+                alpha = atoi(optarg);
+				if (alpha <= 0) {		
+					cout << "[ERROR] Alpha must be bigger than zero.\n" << endl;
+					exit(EXIT_FAILURE);
+				}
+                break;
+            case 'n':
+                n_threads = atoi(optarg);
+				if (n_threads < 1 || n_threads > 8) {		
+					cout << "[ERROR] Number of threads must be [1-8]\n" << endl;
+					exit(EXIT_FAILURE);
+				}
+                break;
+			case 't':
+                threshold = atof(optarg);
+				if (threshold < 0 || threshold > 1) {		
+					cout << "[ERROR] Probability threshold must be between 0 and 1.\n" << endl;
+					exit(EXIT_FAILURE);
+				}
+                break;
+            default:
+                cerr << "Usage: " << argv[0] << " -f <filename> -k <window_size> -a <alpha> -n <num_threads> -t <threshold>\n";
+                return 1;
+        }
+    }
+
+	int file_length;
+
+	ifstream file.open(filename);
+	if (!file .is_open()) {
+		cout << "[ERROR] Can't open file '" << filename << "'" << endl;
+		exit(EXIT_FAILURE);
+	}
+	file.seekg(0, ios::end);
+	file_length = file.tellg();
+	file.seekg(0, ios::beg);
+
+	CopyModel cp(file, k, alpha, threshold, n_threads, file_lenght);
 
 	cp.start();
 
