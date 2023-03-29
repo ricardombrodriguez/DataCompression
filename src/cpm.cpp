@@ -39,6 +39,8 @@ class CopyModel
 		vector<char> file_buffer;			
 		map<string, map<char, struct char_data_t>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
 		int pointer;
+		float probability;
+		float n_bits;
 
 		/**
 		*	{'AAAA': { 'B' : [Nhits, nFails, Prob], 'C': [Nhits, nFials, Prob]}}
@@ -194,6 +196,18 @@ class CopyModel
 			cout << "Expected total number of bits = " << expected_total_bits << endl;
 
 		}	
+
+
+		void export_run(string filename) {
+			ofstream out;
+			out.open (filename);
+			out << "file : " << this->filename << endl;
+			out << "k : " << this->k << endl;
+			out << "alpha : " << this->alpha << endl;
+			out << "prob : " << this->probability << endl;
+			out << "bits : " << this->n_bits << endl;
+			out.close();
+		}
 };
 
 
@@ -204,6 +218,7 @@ int main(int argc, char **argv) {
 	
 	// Command line arguments
 	string filename; 									// file to predict and compare
+	string out_file;
 	int k = 5;											// size of the sliding window
 	float alpha = 0.1;									// alpha value for probability
 	float threshold = 0.5;								// probability threshold
@@ -213,6 +228,9 @@ int main(int argc, char **argv) {
 	int opt;
     while ((opt = getopt(argc, argv, "f:k:a:t:o:")) != -1) {
         switch (opt) {
+			case 'o':
+				out_file = string(optarg);
+				break;
             case 'f':
                 filename = string(optarg);
                 break;
@@ -249,6 +267,7 @@ int main(int argc, char **argv) {
 	CopyModel cp(filename, k, alpha, threshold, output_file);
 
 	cp.start();
+	cp.export_run(out_file);
 
 	return 0;
 }
