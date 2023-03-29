@@ -13,7 +13,6 @@
 
 using namespace std;
 
-
 class CopyModel 
 {
 	private:
@@ -32,7 +31,7 @@ class CopyModel
 		*/
 		ifstream file;
 		vector<char> file_buffer;			
-		multimap<string, map<char, int[3]>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
+		map<string, map<char, int[3]>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
 		int pointer;
 
 		/**
@@ -77,26 +76,29 @@ class CopyModel
 		 */
 		void replace_sequence_lookahead_character(string seq) 
 		{
-
+			/*
 			if (this->sequences_lookahead.count(seq) > 1) {
 
 				auto it = this->sequences_lookahead.find(seq);
 				//int position_to_remove = it->second + this->k;
 				int position_to_remove = it->second;
 				char character_to_reset = this->file_buffer[position_to_remove];
-				this->sequences_counters[character_to_reset][0] = 0;
-				this->sequences_counters[character_to_reset][1] = 0;
+				this->sequences_lookahead[character_to_reset][0] = 0;
+				this->sequences_lookahead[character_to_reset][1] = 0;
 				this->sequences_lookahead.erase(it);
 				
 			}
+			*/
 
 		}
 
 		float calculate_probability(string seq, char ch)
 		{
-			int hits = this->sequences_counters[ch][0];
-			int fails = this->sequences_counters[ch][1];
-			return ((hits + this->alpha) / (hits + fails + 2 * this->alpha));
+			int hits = this->sequences_lookahead[seq][ch][0];
+			int fails = this->sequences_lookahead[seq][ch][1];
+
+			this->sequences_lookahead[seq][ch][2] = ((hits + this->alpha) / (hits + fails + 2 * this->alpha));
+			return float(this->sequences_lookahead[seq][ch][2]);
 		}
 
 		void start()
@@ -116,13 +118,6 @@ class CopyModel
 			while (!this->file.eof()) {
 				
 				this->file.get(ch);
-
-				/*
-				if (this->sequences_counters.count(ch) < 1) {
-					this->sequences_counters[ch][0] = 0;		// Initialize Nh & Nf for the new character
-					this->sequences_counters[ch][1] = 0;
-				}
-				*/
 				
 				file_buffer.insert(file_buffer.begin() + pointer, ch);		// Add *ch* to file buffer in index/position *pointer*
 
@@ -132,7 +127,7 @@ class CopyModel
 				{
 
 					if (this->sequences_lookahead.count(seq) < 1) { //sliding windows not in dictionary.keys
-						this->sequences_lookahead.push_back(seq, {});
+						this->sequences_lookahead.insert({seq, {}});
 					}
 
 					if (!this->file.get(next_character)) {
@@ -142,7 +137,8 @@ class CopyModel
 					}
 					
 					if (this->sequences_lookahead[seq].count(next_character) < 1) {
-						this->sequences_lookahead[seq].push_back(next_character, {0,0,0});
+						
+						this->sequences_lookahead[seq].insert(next_character, {0, 0, 0});
 					} else {
 						calculate_probability(seq, next_character);
 					}
@@ -151,34 +147,6 @@ class CopyModel
 				
 				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)	
 			}
-
-		
-			float probability = ((float)Nh) / (Nh + Nf);
-			float n_bits = total_num_bits / this->file_lenght;
-
-			cout << "Nh = " << Nh << endl;
-			cout << "Nf = " << Nf << endl;
-			cout << "Probability " << probability << endl;
-			cout << "Bits = " << n_bits << endl;
-			cout << "Estimated total numbers of bits = " << total_num_bits << endl;
-
-
-			// Open output file stream
-			ofstream outputFile("output.txt");
-			
-			// Loop through the multimap and write to output file stream
-			for (auto it = this->sequences_lookahead.begin(); it != this->sequences_lookahead.end(); ) {
-				outputFile << it->first << " ";
-				auto range = this->sequences_lookahead.equal_range(it->first);
-				for (auto i = range.first; i != range.second; ++i) {
-					outputFile << i->second << " ";
-				}
-				outputFile << std::endl;
-				it = range.second;
-			}
-			
-			// Close output file stream
-			outputFile.close();
 
 		}	
 };

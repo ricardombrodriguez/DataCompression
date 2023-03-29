@@ -37,7 +37,7 @@ multimap<string, int> load_model(string input_file) {
 
 char get_next_character_prediction(string file_buffer, pair<multimap<string, int>::iterator, multimap<string, int>::iterator> iterator)
 {
-	char chosen_ch = file_buffer[iterator.first->second];				
+	char chosen_ch = file_buffer[iterator.first->second+1];				
 	return chosen_ch;
 
 }
