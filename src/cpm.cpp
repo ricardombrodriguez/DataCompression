@@ -13,7 +13,6 @@
 
 using namespace std;
 
-
 class CopyModel 
 {
 	private:
@@ -34,6 +33,8 @@ class CopyModel
 		multimap<string, int> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
 		map<char, int[2]> character_counters;					// Key-value pairs. Key: string sequence, Value: [Nh, Nf]. Keep track of Nh and Nf of the sequence lookahead character
 		int pointer;
+		float probability;
+		float n_bits;
 
 
 	public:
@@ -202,8 +203,22 @@ class CopyModel
 			cout << "Nf = " << Nf << endl;
 			cout << "Probability " << probability << endl;
 			cout << "Bits = " << n_bits << endl;
+			this->probability = probability;
+			this->n_bits = n_bits;
 
 		}	
+
+
+		void export_run(string filename) {
+			ofstream out;
+			out.open (filename);
+			out << "file : " << this->filename << endl;
+			out << "k : " << this->k << endl;
+			out << "alpha : " << this->alpha << endl;
+			out << "prob : " << this->probability << endl;
+			out << "bits : " << this->n_bits << endl;
+			out.close();
+		}
 };
 
 
@@ -214,14 +229,18 @@ int main(int argc, char **argv) {
 	
 	// Command line arguments
 	string filename; 									// file to predict and compare
+	string out_file;
 	int k = 5;											// size of the sliding window
 	float alpha = 0.1;									// alpha value for probability
 	float threshold = 0.5;								// probability threshold
 
 
 	int opt;
-    while ((opt = getopt(argc, argv, "f:k:a:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "f:k:a:t:o:")) != -1) {
         switch (opt) {
+			case 'o':
+				out_file = string(optarg);
+				break;
             case 'f':
                 filename = string(optarg);
                 break;
@@ -255,6 +274,7 @@ int main(int argc, char **argv) {
 	CopyModel cp(filename, k, alpha, threshold);
 
 	cp.start();
+	cp.export_run(out_file);
 
 	return 0;
 }
