@@ -26,42 +26,37 @@ class CopyModel
 		/**
 		*  params
 		*/
-		string filename;
-		int k;
-		float alpha;
-		float threshold;
-		int file_length;
-		string output_file;
+		string filename;		// text source file name
+		int k;					// sliding window size
+		float alpha;			// smoothning factor
+		float threshold;		// minimum performance of the model
+		int file_length;		// length of the file
+		string output_file;		// file to output the runs
 
 		/**
 		*  structs
 		*/
-		ifstream file;
-		vector<char> file_buffer;			
-		unordered_map<string, unordered_map<char, struct char_data_t>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
-		int pointer;
-		float probability;
-		float n_bits;
-		float expected_total_bits;
-
-		time_t exec_time;
-
-		/**
-		*	{'AAAA': { 'B' : [Nhits, nFails, Prob], 'C': [Nhits, nFials, Prob]}}
-		*
-		*/
-
+		ifstream file;																			// file stream
+		unordered_map<string, unordered_map<char, struct char_data_t>> sequences_lookahead;		// sequence indexed dictionary for char probabilities
+		int pointer;																			// file stream pointer	
+		float accuracy;																			// current model prediction accuracy
+		float n_bits;																			// average num bits per symbol
+		float expected_total_bits;																// expected total bits of compressed file
+		time_t exec_time;																		// execution time
 
 	public:
+		/*
+		*	Instantiation
+		*	
+		*/
 		CopyModel(string filename, int k, float alpha, float threshold, string output_file)
 		{
-
-			this->filename = filename;
-			this->k = k;
-			this->alpha = alpha;
-			this->threshold = threshold;
-			this->output_file = output_file;
-			this->file_buffer = {};
+			
+			this->filename = filename;				
+			this->k = k;						
+			this->alpha = alpha;					
+			this->threshold = threshold;			
+			this->output_file = output_file;	
 			this->pointer = 0;
 
 			this->file.open(filename);
@@ -113,8 +108,6 @@ class CopyModel
 			char next_character_prevision;
 			int Nh = 0, Nf = 0;
 			int cur_Nh = 0, cur_Nf = 0;
-			float total_num_bits;
-			float probability;
 
 
 			this->exec_time = clock();
@@ -122,12 +115,9 @@ class CopyModel
 			while (!this->file.eof()) {
 
 				this->file.get(ch);
-
-				file_buffer.insert(file_buffer.begin() + pointer, ch);		// Add *ch* to file buffer in index/position *pointer*
-
 				sliding_window.push_back(ch);
 
-				if (sliding_window.size() == k)
+				if (sliding_window.size() == k+1)
 				{
 					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);
 
@@ -141,16 +131,9 @@ class CopyModel
 
 					if (this->sequences_lookahead.count(seq) < 1) { //sliding windows not in dictionary.keys
 						this->sequences_lookahead.insert({seq, {}});	
-					}
-					
-					if (this->sequences_lookahead[seq].count(next_character) < 1) {
-						char_data_t charInit = { 0, 0, 0 };
-						this->sequences_lookahead[seq][next_character] = charInit;
-						calculate_probability(seq, next_character);
 					} else {
+					
 						next_character_prevision = get_next_character_prediction(seq);
-
-
 
 						// cout << "Sequence: " << seq << endl;
 
@@ -172,13 +155,13 @@ class CopyModel
 
 						calculate_probability(seq, next_character_prevision);
 
-						probability = ((float)cur_Nh) / (cur_Nh + cur_Nf);
+						this->accuracy = ((float)cur_Nh) / (cur_Nh + cur_Nf);
 
 						//cout << "Cur model prob: " << probability << endl;
 
 						//cout << endl;
 
-						if (probability < this->threshold) {
+						if (this->accuracy < this->threshold) {
 							Nh += cur_Nh;
 							Nf += cur_Nf;
 							cur_Nh = 0;
@@ -187,24 +170,30 @@ class CopyModel
 						}
 					}
 
+
+					if (this->sequences_lookahead[seq].count(next_character) < 1) {
+						char_data_t charInit = { 0, 0, 0 };
+						this->sequences_lookahead[seq][next_character] = charInit;
+						calculate_probability(seq, next_character);
+					}
 				} 
 				
 				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)	
 			}
 
-			this->probability = ((float)Nh) / (Nh + Nf);
-			this->n_bits = -log(probability)/log(2);
-			this->expected_total_bits = n_bits * this->file_length;
+			this->accuracy = ((float)Nh) / (Nh + Nf);
+			this->n_bits = -log(this->accuracy)/log(2);
+			this->expected_total_bits = this->n_bits * this->file_length;
 
 			this->exec_time =  float (clock() - this->exec_time);
-			/*
+			
 			cout << "Nh = " << Nh << endl;
 			cout << "Nf = " << Nf << endl;
-			cout << "Probability " << probability << endl;
-			cout << "Bits = " << n_bits << endl;
-			cout << "Expected total number of bits = " << expected_total_bits << endl;
+			cout << "Probability " << this->accuracy << endl;
+			cout << "Bits = " << this->n_bits << endl;
+			cout << "Expected total number of bits = " << this->expected_total_bits << endl;
 			cout << this->exec_time << " ms" << endl;
-			*/
+			
 
 
 			ofstream out;
@@ -229,7 +218,7 @@ class CopyModel
 			out << "file : " << this->filename << endl;
 			out << "k : " << this->k << endl;
 			out << "alpha : " << this->alpha << endl;
-			out << "prob : " << this->probability << endl;
+			out << "prob : " << this->accuracy << endl;
 			out << "bits : " << this->n_bits << endl;
 			out << "total_bits : " << this->expected_total_bits << endl;
 			out << "time : " << this->exec_time << endl;

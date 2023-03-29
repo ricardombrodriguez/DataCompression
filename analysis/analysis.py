@@ -15,7 +15,9 @@ def load_runs(DIR):
         'k': [],
         'prob': [],
         'alpha': [],
-        'bits': []
+        'bits': [],
+        'total_bits': [],
+        'time': []
     }
 
     for run in os.listdir(DIR):
