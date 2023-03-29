@@ -48,6 +48,9 @@ class CopyModel
 		/*
 		*	Instantiation
 		*	
+		*	- Init structures
+		*	- Open file
+		*	- Calculate file length
 		*/
 		CopyModel(string filename, int k, float alpha, float threshold, string output_file)
 		{
@@ -69,6 +72,15 @@ class CopyModel
 			this->file.seekg(0, ios::beg);
 		}
 
+		/**
+		*	Gets the prediction based on the current sequence and the probability table
+		*
+		*	- Iterates map with key = sequence
+		*	- Finds the struct with maximum probability
+		*
+		*	@param seq sequence to predict
+		*	@return predicted char
+		*/
 		char get_next_character_prediction(string seq)
 		{
 			float maxProb = 0;
@@ -85,6 +97,14 @@ class CopyModel
 
 		}
 
+		/**
+		*	Calculates probability of a char being next in a sequence based
+		*	on previous hits and fails
+		*	
+		*	@param seq sequence to calculate the probabilities
+		*	@param ch next char in sequence
+		*	@return new probability
+		*/
 		float calculate_probability(string seq, char ch)
 		{
 			int hits = this->sequences_lookahead[seq][ch].numHits;
@@ -94,10 +114,16 @@ class CopyModel
 			return float(this->sequences_lookahead[seq][ch].prob);
 		}
 
-		void reset_map() {
-			this->sequences_lookahead.clear();
-		}
-
+		/**
+		*	Main model workflow
+		*
+		*	Get chars from the stream and build probability table to get prediction
+		*
+		*	- Create a sequence o k chars
+		*	- Predict the next char based on probability table if sequence in table
+		*	- Recalculate probabilities
+		*	- Append new chars to table
+		*/
 		void start()
 		{
 
@@ -117,34 +143,20 @@ class CopyModel
 				this->file.get(ch);
 				sliding_window.push_back(ch);
 
-				if (sliding_window.size() == k+1)
+				if (sliding_window.size() == k+1)													// build a k-size window
 				{
-					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);
-
-					string seq(sliding_window.begin(), sliding_window.end());
+					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);		// update window
+					string seq(sliding_window.begin(), sliding_window.end());						// convert window buffer to string
 
 					if (!this->file.get(next_character)) {
-						// reached end of file before k characters
-						//cerr << "Reached EOF" << endl;
-						break;
+						break;																		// can't construct a window (file has less than k chars)
 					}
 
-					if (this->sequences_lookahead.count(seq) < 1) { //sliding windows not in dictionary.keys
+					if (this->sequences_lookahead.count(seq) < 1) { 								// sequence not in probability table
 						this->sequences_lookahead.insert({seq, {}});	
 					} else {
 					
-						next_character_prevision = get_next_character_prediction(seq);
-
-						// cout << "Sequence: " << seq << endl;
-
-						// cout << "Current table: " << endl;
-
-						// for ( auto const&p : this->sequences_lookahead[seq] ) {
-						// 	cout << p.first << ": " << "Nh = " << p.second.numHits << " Nf = " << p.second.numFails << " P = " << p.second.prob << endl;
-						// }
-
-						//cout << seq << " Predicted: " << next_character_prevision << " GOt: " << next_character << endl;
-
+						next_character_prevision = get_next_character_prediction(seq);				// get character prevision and increment respective fail / hit counter
 						if (next_character == next_character_prevision) {
 							this->sequences_lookahead[seq][next_character_prevision].numHits += 1;
 							cur_Nh++;
@@ -153,26 +165,19 @@ class CopyModel
 							cur_Nf++;
 						}
 
-						calculate_probability(seq, next_character_prevision);
+						calculate_probability(seq, next_character_prevision);						// after updating hits and fails, recalculate char probability
+						this->accuracy = ((float)cur_Nh) / (cur_Nh + cur_Nf);						// recalculate model accuracy
 
-						this->accuracy = ((float)cur_Nh) / (cur_Nh + cur_Nf);
-
-						//cout << "Cur model prob: " << probability << endl;
-
-						//cout << endl;
-
-						if (this->accuracy < this->threshold) {
-							Nh += cur_Nh;
+						if (this->accuracy < this->threshold) {										// if model below threshold
+							Nh += cur_Nh;															// reset params
 							Nf += cur_Nf;
 							cur_Nh = 0;
 							cur_Nf = 0;
-							reset_map();
+							this->sequences_lookahead.clear();;
 						}
 					}
-
-
-					if (this->sequences_lookahead[seq].count(next_character) < 1) {
-						char_data_t charInit = { 0, 0, 0 };
+					if (this->sequences_lookahead[seq].count(next_character) < 1) {					// add newly seen character after sequence to table
+						char_data_t charInit = { 0, 0, 0 };											// with 1/2 probability
 						this->sequences_lookahead[seq][next_character] = charInit;
 						calculate_probability(seq, next_character);
 					}
@@ -181,21 +186,47 @@ class CopyModel
 				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)	
 			}
 
+
+			/**
+			*	Calculate model metrics
+			*/
 			this->accuracy = ((float)Nh) / (Nh + Nf);
 			this->n_bits = -log(this->accuracy)/log(2);
 			this->expected_total_bits = this->n_bits * this->file_length;
 
 			this->exec_time =  float (clock() - this->exec_time);
 			
+			/*
 			cout << "Nh = " << Nh << endl;
 			cout << "Nf = " << Nf << endl;
 			cout << "Probability " << this->accuracy << endl;
 			cout << "Bits = " << this->n_bits << endl;
 			cout << "Expected total number of bits = " << this->expected_total_bits << endl;
 			cout << this->exec_time << " ms" << endl;
-			
+			*/
+		}	
+
+		/**
+		*	Export run to file for further analysis
+		*/
+		void export_run(string filename) {
+			ofstream out;
+			out.open (filename);
+			out << "file : " << this->filename << endl;
+			out << "k : " << this->k << endl;
+			out << "alpha : " << this->alpha << endl;
+			out << "prob : " << this->accuracy << endl;
+			out << "bits : " << this->n_bits << endl;
+			out << "total_bits : " << this->expected_total_bits << endl;
+			out << "time : " << this->exec_time << endl;
+			out.close();
+		}
 
 
+		/**
+		*	Export probability table for text generation
+		*/
+		void export_model(string filename) {
 			ofstream out;
 
 			out.open("model");
@@ -208,20 +239,6 @@ class CopyModel
 				}
 				out << endl;
 			}
-			out.close();
-
-		}	
-
-		void export_run(string filename) {
-			ofstream out;
-			out.open (filename);
-			out << "file : " << this->filename << endl;
-			out << "k : " << this->k << endl;
-			out << "alpha : " << this->alpha << endl;
-			out << "prob : " << this->accuracy << endl;
-			out << "bits : " << this->n_bits << endl;
-			out << "total_bits : " << this->expected_total_bits << endl;
-			out << "time : " << this->exec_time << endl;
 			out.close();
 		}
 };
@@ -281,6 +298,7 @@ int main(int argc, char **argv) {
 
 	cp.start();
 	cp.export_run(out_file);
+	cp.export_model("model");
 
 	return 0;
 }
