@@ -13,6 +13,12 @@
 
 using namespace std;
 
+struct char_data_t {
+	int numHits;
+	int numFails;
+	float prob;
+};
+
 class CopyModel 
 {
 	private:
@@ -31,7 +37,7 @@ class CopyModel
 		*/
 		ifstream file;
 		vector<char> file_buffer;			
-		map<string, map<char, int[3]>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
+		map<string, map<char, struct char_data_t>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
 		int pointer;
 
 		/**
@@ -62,10 +68,16 @@ class CopyModel
 			this->file.seekg(0, ios::beg);
 		}
 
-		char get_next_character_prediction(pair<multimap<string, int>::iterator, multimap<string, int>::iterator> iterator)
+		char get_next_character_prediction(string seq)
 		{
-			char chosen_ch = this->file_buffer[iterator.first->second];				
-			return chosen_ch;
+			cout << "yo" << endl;
+			int maxProb;
+
+			for ( auto const&p : this->sequences_lookahead[seq]) {
+				cout << p.first << '\n';
+			}
+
+			return 'a';
 
 		}
 
@@ -94,11 +106,11 @@ class CopyModel
 
 		float calculate_probability(string seq, char ch)
 		{
-			int hits = this->sequences_lookahead[seq][ch][0];
-			int fails = this->sequences_lookahead[seq][ch][1];
+			int hits = this->sequences_lookahead[seq][ch].numHits;
+			int fails = this->sequences_lookahead[seq][ch].numFails;
 
-			this->sequences_lookahead[seq][ch][2] = ((hits + this->alpha) / (hits + fails + 2 * this->alpha));
-			return float(this->sequences_lookahead[seq][ch][2]);
+			this->sequences_lookahead[seq][ch].prob = ((hits + this->alpha) / (hits + fails + 2 * this->alpha));
+			return float(this->sequences_lookahead[seq][ch].prob);
 		}
 
 		void start()
@@ -116,7 +128,6 @@ class CopyModel
 			float total_num_bits;
 
 			while (!this->file.eof()) {
-				
 				this->file.get(ch);
 				
 				file_buffer.insert(file_buffer.begin() + pointer, ch);		// Add *ch* to file buffer in index/position *pointer*
@@ -126,20 +137,24 @@ class CopyModel
 				if (sliding_window.size() == k)
 				{
 
-					if (this->sequences_lookahead.count(seq) < 1) { //sliding windows not in dictionary.keys
-						this->sequences_lookahead.insert({seq, {}});
-					}
+					seq(sliding_window.begin(), sliding_window.end());
 
 					if (!this->file.get(next_character)) {
 						// reached end of file before k characters
 						cerr << "Reached EOF" << endl;
 						break;
 					}
+
+					if (this->sequences_lookahead.count(seq) < 1) { //sliding windows not in dictionary.keys
+						this->sequences_lookahead.insert({seq, {}});	
+					}
 					
 					if (this->sequences_lookahead[seq].count(next_character) < 1) {
 						
-						this->sequences_lookahead[seq].insert(next_character, {0, 0, 0});
+						char_data_t charInit = { 0, 0, 0 };
+						this->sequences_lookahead[seq][next_character] = charInit;
 					} else {
+						next_character_prevision = get_next_character_prediction(seq);
 						calculate_probability(seq, next_character);
 					}
 
