@@ -10,6 +10,7 @@
 #include <string>
 #include <getopt.h>
 #include <math.h>
+#include <unordered_map>
 
 using namespace std;
 
@@ -37,10 +38,12 @@ class CopyModel
 		*/
 		ifstream file;
 		vector<char> file_buffer;			
-		map<string, map<char, struct char_data_t>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
+		unordered_map<string, unordered_map<char, struct char_data_t>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
 		int pointer;
 		float probability;
 		float n_bits;
+
+		time_t exec_time;
 
 		/**
 		*	{'AAAA': { 'B' : [Nhits, nFails, Prob], 'C': [Nhits, nFials, Prob]}}
@@ -111,6 +114,9 @@ class CopyModel
 			int cur_Nh = 0, cur_Nf = 0;
 			float total_num_bits;
 			float probability;
+
+
+			this->exec_time = clock();
 
 			while (!this->file.eof()) {
 
@@ -189,11 +195,14 @@ class CopyModel
 			float n_bits = -log(probability)/log(2);
 			float expected_total_bits = n_bits * this->file_length;
 
+			this->exec_time =  float (clock() - this->exec_time);
+
 			cout << "Nh = " << Nh << endl;
 			cout << "Nf = " << Nf << endl;
 			cout << "Probability " << probability << endl;
 			cout << "Bits = " << n_bits << endl;
 			cout << "Expected total number of bits = " << expected_total_bits << endl;
+			cout << this->exec_time << " ms" << endl;
 
 		}	
 
@@ -206,6 +215,7 @@ class CopyModel
 			out << "alpha : " << this->alpha << endl;
 			out << "prob : " << this->probability << endl;
 			out << "bits : " << this->n_bits << endl;
+			out << "time : " << this->exec_time << endl;
 			out.close();
 		}
 };
