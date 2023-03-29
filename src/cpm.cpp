@@ -1,4 +1,4 @@
- #include <iostream>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <fstream>
@@ -25,25 +25,31 @@ class CopyModel
 		float alpha;
 		float threshold;
 		int file_length;
+		string output_file;
 
 		/**
 		*  structs
 		*/
 		ifstream file;
 		vector<char> file_buffer;			
-		multimap<string, int> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
-		map<char, int[2]> character_counters;					// Key-value pairs. Key: string sequence, Value: [Nh, Nf]. Keep track of Nh and Nf of the sequence lookahead character
+		multimap<string, map<char, int[3]>> sequences_lookahead;				// Key-value pairs. Key: string sequence, Value: current best lookahead character
 		int pointer;
+
+		/**
+		*	{'AAAA': { 'B' : [Nhits, nFails, Prob], 'C': [Nhits, nFials, Prob]}}
+		*
+		*/
 
 
 	public:
-		CopyModel(string filename, int k, float alpha, float threshold)
+		CopyModel(string filename, int k, float alpha, float threshold, string output_file)
 		{
 
 			this->filename = filename;
 			this->k = k;
 			this->alpha = alpha;
 			this->threshold = threshold;
+			this->output_file = output_file;
 			this->file_buffer = {};
 			this->pointer = 0;
 
@@ -57,23 +63,9 @@ class CopyModel
 			this->file.seekg(0, ios::beg);
 		}
 
-		// void addToAlphabet(char ch)
-		// {
-		// 	this->alphabet.push_back(ch);
-		// }
-
-
-		/*
-		void processSequence(vector<char> sequence, char ch)
-		{
-			this->sequences.insert({ sequence, ch });
-		}
-		*/
-
 		char get_next_character_prediction(pair<multimap<string, int>::iterator, multimap<string, int>::iterator> iterator)
 		{
-			//char chosen_ch = this->file_buffer[iterator.first->second + this->k];
-			char chosen_ch = this->file_buffer[iterator.first->second];
+			char chosen_ch = this->file_buffer[iterator.first->second];				
 			return chosen_ch;
 
 		}
@@ -92,19 +84,18 @@ class CopyModel
 				//int position_to_remove = it->second + this->k;
 				int position_to_remove = it->second;
 				char character_to_reset = this->file_buffer[position_to_remove];
-				this->character_counters[character_to_reset][0] = 0;
-				this->character_counters[character_to_reset][1] = 0;
+				this->sequences_counters[character_to_reset][0] = 0;
+				this->sequences_counters[character_to_reset][1] = 0;
 				this->sequences_lookahead.erase(it);
 				
 			}
 
 		}
 
-		float calculate_probability(char ch)
+		float calculate_probability(string seq, char ch)
 		{
-			int hits = this->character_counters[ch][0];
-			int fails = this->character_counters[ch][1];
-			
+			int hits = this->sequences_counters[ch][0];
+			int fails = this->sequences_counters[ch][1];
 			return ((hits + this->alpha) / (hits + fails + 2 * this->alpha));
 		}
 
@@ -120,15 +111,18 @@ class CopyModel
 			int n_previous_encounters;
 			int Nh = 0, Nf = 0;
 			float p_hit;
+			float total_num_bits;
 
 			while (!this->file.eof()) {
 				
 				this->file.get(ch);
 
-				if (this->character_counters.count(ch) < 1) {
-					this->character_counters[ch][0] = 0;		// Initialize Nh & Nf for the new character
-					this->character_counters[ch][1] = 0;
+				/*
+				if (this->sequences_counters.count(ch) < 1) {
+					this->sequences_counters[ch][0] = 0;		// Initialize Nh & Nf for the new character
+					this->sequences_counters[ch][1] = 0;
 				}
+				*/
 				
 				file_buffer.insert(file_buffer.begin() + pointer, ch);		// Add *ch* to file buffer in index/position *pointer*
 
@@ -136,72 +130,55 @@ class CopyModel
 
 				if (sliding_window.size() == k)
 				{
-					
-					// for (char i: sliding_window)
-					// 	cout << i;
-					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);
 
-					string seq(sliding_window.begin(), sliding_window.end());
-
-					n_previous_encounters = this->sequences_lookahead.count(seq);
+					if (this->sequences_lookahead.count(seq) < 1) { //sliding windows not in dictionary.keys
+						this->sequences_lookahead.push_back(seq, {});
+					}
 
 					if (!this->file.get(next_character)) {
 						// reached end of file before k characters
 						cerr << "Reached EOF" << endl;
 						break;
 					}
-
-					//cout << "(" << next_character << ")\n" << endl;
-
-					//cout << seq;
-					if (n_previous_encounters > 0) {
-
-						next_character_prevision = get_next_character_prediction(this->sequences_lookahead.equal_range(seq));
-						
-						if (this->character_counters.count(next_character_prevision) < 1) {
-							this->character_counters[next_character_prevision][0] = 0;
-							this->character_counters[next_character_prevision][1] = 0;
-						}
-
-						if (next_character_prevision == next_character) {
-							this->character_counters[next_character_prevision][0]++;	// character hits
-							Nh++;																												// overall hits
-						} else {			
-							cout << "Character: " << next_character << " | Predicted: " << next_character_prevision << endl;
-							this->character_counters[next_character_prevision][1]++;	// character fails
-							Nf++;																												// overall fails
-						}
-
-						// aualizar this->sequences_counters
-						p_hit = calculate_probability(next_character_prevision);
-
-						// Change lookahead character
-						if (p_hit < this->threshold) {
-							cout << "phit baixo, vou mudar o lookahead: " << endl;
-							replace_sequence_lookahead_character(seq);
-						}
-						
+					
+					if (this->sequences_lookahead[seq].count(next_character) < 1) {
+						this->sequences_lookahead[seq].push_back(next_character, {0,0,0});
+					} else {
+						calculate_probability(seq, next_character);
 					}
-					//cout << endl;
-
-					this->sequences_lookahead.insert({seq, this->pointer});
 
 				} 
 				
-				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)
-
-
-				
+				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)	
 			}
 
 		
 			float probability = ((float)Nh) / (Nh + Nf);
-			float n_bits = -log(probability)/log(2);
+			float n_bits = total_num_bits / this->file_lenght;
 
 			cout << "Nh = " << Nh << endl;
 			cout << "Nf = " << Nf << endl;
 			cout << "Probability " << probability << endl;
 			cout << "Bits = " << n_bits << endl;
+			cout << "Estimated total numbers of bits = " << total_num_bits << endl;
+
+
+			// Open output file stream
+			ofstream outputFile("output.txt");
+			
+			// Loop through the multimap and write to output file stream
+			for (auto it = this->sequences_lookahead.begin(); it != this->sequences_lookahead.end(); ) {
+				outputFile << it->first << " ";
+				auto range = this->sequences_lookahead.equal_range(it->first);
+				for (auto i = range.first; i != range.second; ++i) {
+					outputFile << i->second << " ";
+				}
+				outputFile << std::endl;
+				it = range.second;
+			}
+			
+			// Close output file stream
+			outputFile.close();
 
 		}	
 };
@@ -217,10 +194,11 @@ int main(int argc, char **argv) {
 	int k = 5;											// size of the sliding window
 	float alpha = 0.1;									// alpha value for probability
 	float threshold = 0.5;								// probability threshold
+	string output_file = "output.txt";
 
 
 	int opt;
-    while ((opt = getopt(argc, argv, "f:k:a:t:")) != -1) {
+    while ((opt = getopt(argc, argv, "f:k:a:t:o:")) != -1) {
         switch (opt) {
             case 'f':
                 filename = string(optarg);
@@ -246,13 +224,16 @@ int main(int argc, char **argv) {
 					exit(EXIT_FAILURE);
 				}
                 break;
+			case 'o':
+                output_file = string(optarg);
+                break;
             default:
-                cerr << "Usage: " << argv[0] << " -f <filename> -k <window_size> -a <alpha> -t <threshold>\n";
+                cerr << "Usage: " << argv[0] << " -f <filename> -k <window_size> -a <alpha> -t <threshold> -o <previsions_output_file>\n";
                 return 1;
         }
     }
 
-	CopyModel cp(filename, k, alpha, threshold);
+	CopyModel cp(filename, k, alpha, threshold, output_file);
 
 	cp.start();
 
