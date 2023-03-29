@@ -84,29 +84,6 @@ class CopyModel
 
 		}
 
-		/**
-		 * @brief Changes the lookahead character of the sequence by removing the first item on the list
-		 * 
-		 * @param seq 
-		 */
-		void replace_sequence_lookahead_character(string seq) 
-		{
-			/*
-			if (this->sequences_lookahead.count(seq) > 1) {
-
-				auto it = this->sequences_lookahead.find(seq);
-				//int position_to_remove = it->second + this->k;
-				int position_to_remove = it->second;
-				char character_to_reset = this->file_buffer[position_to_remove];
-				this->sequences_lookahead[character_to_reset][0] = 0;
-				this->sequences_lookahead[character_to_reset][1] = 0;
-				this->sequences_lookahead.erase(it);
-				
-			}
-			*/
-
-		}
-
 		float calculate_probability(string seq, char ch)
 		{
 			int hits = this->sequences_lookahead[seq][ch].numHits;
@@ -124,15 +101,12 @@ class CopyModel
 		{
 
 			char ch;		
-			char i;	
 			vector<char> sliding_window;
 			string seq;
 			char next_character;
 			char next_character_prevision;
-			int n_previous_encounters;
 			int Nh = 0, Nf = 0;
 			int cur_Nh = 0, cur_Nf = 0;
-			float p_hit;
 			float total_num_bits;
 			float probability;
 
@@ -169,15 +143,15 @@ class CopyModel
 
 
 
-						cout << "Sequence: " << seq << endl;
+						// cout << "Sequence: " << seq << endl;
 
-						cout << "Current table: " << endl;
+						// cout << "Current table: " << endl;
 
-						for ( auto const&p : this->sequences_lookahead[seq] ) {
-							cout << p.first << ": " << "Nh = " << p.second.numHits << " Nf = " << p.second.numFails << " P = " << p.second.prob << endl;
-						}
+						// for ( auto const&p : this->sequences_lookahead[seq] ) {
+						// 	cout << p.first << ": " << "Nh = " << p.second.numHits << " Nf = " << p.second.numFails << " P = " << p.second.prob << endl;
+						// }
 
-						cout << seq << " Predicted: " << next_character_prevision << " GOt: " << next_character << endl;
+						//cout << seq << " Predicted: " << next_character_prevision << " GOt: " << next_character << endl;
 
 						if (next_character == next_character_prevision) {
 							this->sequences_lookahead[seq][next_character_prevision].numHits += 1;
@@ -191,9 +165,9 @@ class CopyModel
 
 						probability = ((float)cur_Nh) / (cur_Nh + cur_Nf);
 
-						cout << "Cur model prob: " << probability << endl;
+						//cout << "Cur model prob: " << probability << endl;
 
-						cout << endl;
+						//cout << endl;
 
 						if (probability < this->threshold) {
 							Nh += cur_Nh;
@@ -211,11 +185,13 @@ class CopyModel
 
 			probability = ((float)Nh) / (Nh + Nf);
 			float n_bits = -log(probability)/log(2);
+			float expected_total_bits = n_bits * this->file_length;
 
 			cout << "Nh = " << Nh << endl;
 			cout << "Nf = " << Nf << endl;
 			cout << "Probability " << probability << endl;
 			cout << "Bits = " << n_bits << endl;
+			cout << "Expected total number of bits = " << expected_total_bits << endl;
 
 		}	
 };
