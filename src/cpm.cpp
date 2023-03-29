@@ -70,14 +70,17 @@ class CopyModel
 
 		char get_next_character_prediction(string seq)
 		{
-			cout << "yo" << endl;
-			int maxProb;
+			float maxProb = 0;
+			char next;
 
 			for ( auto const&p : this->sequences_lookahead[seq]) {
-				cout << p.first << '\n';
+				if (p.second.prob > maxProb) {
+					maxProb = p.second.prob;
+					next = p.first;
+				}
 			}
 
-			return 'a';
+			return next;
 
 		}
 
@@ -113,6 +116,10 @@ class CopyModel
 			return float(this->sequences_lookahead[seq][ch].prob);
 		}
 
+		void reset_map() {
+			this->sequences_lookahead.clear();
+		}
+
 		void start()
 		{
 
@@ -124,8 +131,10 @@ class CopyModel
 			char next_character_prevision;
 			int n_previous_encounters;
 			int Nh = 0, Nf = 0;
+			int cur_Nh = 0, cur_Nf = 0;
 			float p_hit;
 			float total_num_bits;
+			float probability;
 
 			while (!this->file.eof()) {
 
@@ -137,10 +146,10 @@ class CopyModel
 
 				if (sliding_window.size() == k)
 				{
+					sliding_window.erase(sliding_window.begin(), sliding_window.begin() + 1);
 
 					string seq(sliding_window.begin(), sliding_window.end());
 
-					cout << seq << endl;
 					if (!this->file.get(next_character)) {
 						// reached end of file before k characters
 						cerr << "Reached EOF" << endl;
@@ -154,15 +163,59 @@ class CopyModel
 					if (this->sequences_lookahead[seq].count(next_character) < 1) {
 						char_data_t charInit = { 0, 0, 0 };
 						this->sequences_lookahead[seq][next_character] = charInit;
+						calculate_probability(seq, next_character);
 					} else {
 						next_character_prevision = get_next_character_prediction(seq);
-						calculate_probability(seq, next_character);
+
+
+
+						cout << "Sequence: " << seq << endl;
+
+						cout << "Current table: " << endl;
+
+						for ( auto const&p : this->sequences_lookahead[seq] ) {
+							cout << p.first << ": " << "Nh = " << p.second.numHits << " Nf = " << p.second.numFails << " P = " << p.second.prob << endl;
+						}
+
+						cout << seq << " Predicted: " << next_character_prevision << " GOt: " << next_character << endl;
+
+						if (next_character == next_character_prevision) {
+							this->sequences_lookahead[seq][next_character_prevision].numHits += 1;
+							cur_Nh++;
+						} else {
+							this->sequences_lookahead[seq][next_character_prevision].numFails += 1;
+							cur_Nf++;
+						}
+
+						calculate_probability(seq, next_character_prevision);
+
+						probability = ((float)cur_Nh) / (cur_Nh + cur_Nf);
+
+						cout << "Cur model prob: " << probability << endl;
+
+						cout << endl;
+
+						if (probability < this->threshold) {
+							Nh += cur_Nh;
+							Nf += cur_Nf;
+							cur_Nh = 0;
+							cur_Nf = 0;
+							reset_map();
+						}
 					}
 
 				} 
 				
 				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)	
 			}
+
+			probability = ((float)Nh) / (Nh + Nf);
+			float n_bits = -log(probability)/log(2);
+
+			cout << "Nh = " << Nh << endl;
+			cout << "Nf = " << Nf << endl;
+			cout << "Probability " << probability << endl;
+			cout << "Bits = " << n_bits << endl;
 
 		}	
 };
