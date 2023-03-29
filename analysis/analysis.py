@@ -59,8 +59,8 @@ if __name__ == '__main__':
 
     frame = load_runs(DIR)
 
-    line_chart(frame, "teste.txt", "k", "bits")
-    line_chart(frame, "teste.txt", "k", "time")
+    line_chart(frame, "chry.txt", "k", "total_bits")
+    line_chart(frame, "chry.txt", "k", "time")
 
 
 

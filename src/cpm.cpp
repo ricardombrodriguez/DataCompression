@@ -42,6 +42,7 @@ class CopyModel
 		int pointer;
 		float probability;
 		float n_bits;
+		float expected_total_bits;
 
 		time_t exec_time;
 
@@ -134,7 +135,7 @@ class CopyModel
 
 					if (!this->file.get(next_character)) {
 						// reached end of file before k characters
-						cerr << "Reached EOF" << endl;
+						//cerr << "Reached EOF" << endl;
 						break;
 					}
 
@@ -191,21 +192,36 @@ class CopyModel
 				this->file.seekg(++this->pointer, ios::beg);	// Increments pointer for next iteration (sliding-window)	
 			}
 
-			probability = ((float)Nh) / (Nh + Nf);
-			float n_bits = -log(probability)/log(2);
-			float expected_total_bits = n_bits * this->file_length;
+			this->probability = ((float)Nh) / (Nh + Nf);
+			this->n_bits = -log(probability)/log(2);
+			this->expected_total_bits = n_bits * this->file_length;
 
 			this->exec_time =  float (clock() - this->exec_time);
-
+			/*
 			cout << "Nh = " << Nh << endl;
 			cout << "Nf = " << Nf << endl;
 			cout << "Probability " << probability << endl;
 			cout << "Bits = " << n_bits << endl;
 			cout << "Expected total number of bits = " << expected_total_bits << endl;
 			cout << this->exec_time << " ms" << endl;
+			*/
+
+
+			ofstream out;
+
+			out.open("model");
+
+			for ( auto const&p : this->sequences_lookahead) {
+				string seq = p.first;
+				out << seq << endl;
+				for ( auto const &m : this->sequences_lookahead[seq] ) {
+					out << m.first << " " << m.second.prob << endl;
+				}
+				out << endl;
+			}
+			out.close();
 
 		}	
-
 
 		void export_run(string filename) {
 			ofstream out;
@@ -215,6 +231,7 @@ class CopyModel
 			out << "alpha : " << this->alpha << endl;
 			out << "prob : " << this->probability << endl;
 			out << "bits : " << this->n_bits << endl;
+			out << "total_bits : " << this->expected_total_bits << endl;
 			out << "time : " << this->exec_time << endl;
 			out.close();
 		}
