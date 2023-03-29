@@ -128,8 +128,9 @@ class CopyModel
 			float total_num_bits;
 
 			while (!this->file.eof()) {
+
 				this->file.get(ch);
-				
+
 				file_buffer.insert(file_buffer.begin() + pointer, ch);		// Add *ch* to file buffer in index/position *pointer*
 
 				sliding_window.push_back(ch);
@@ -137,8 +138,9 @@ class CopyModel
 				if (sliding_window.size() == k)
 				{
 
-					seq(sliding_window.begin(), sliding_window.end());
+					string seq(sliding_window.begin(), sliding_window.end());
 
+					cout << seq << endl;
 					if (!this->file.get(next_character)) {
 						// reached end of file before k characters
 						cerr << "Reached EOF" << endl;
@@ -150,7 +152,6 @@ class CopyModel
 					}
 					
 					if (this->sequences_lookahead[seq].count(next_character) < 1) {
-						
 						char_data_t charInit = { 0, 0, 0 };
 						this->sequences_lookahead[seq][next_character] = charInit;
 					} else {
