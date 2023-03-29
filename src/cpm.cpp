@@ -255,9 +255,6 @@ int main(int argc, char **argv) {
 					exit(EXIT_FAILURE);
 				}
                 break;
-			case 'o':
-                output_file = string(optarg);
-                break;
             default:
                 cerr << "Usage: " << argv[0] << " -f <filename> -k <window_size> -a <alpha> -t <threshold> -o <previsions_output_file>\n";
                 return 1;
