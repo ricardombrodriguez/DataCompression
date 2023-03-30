@@ -168,6 +168,8 @@ class CopyModel
 						calculate_probability(seq, next_character_prevision);						// after updating hits and fails, recalculate char probability
 						this->accuracy = ((float)cur_Nh) / (cur_Nh + cur_Nf);						// recalculate model accuracy
 
+
+						
 						if (this->accuracy < this->threshold) {										// if model below threshold
 							Nh += cur_Nh;															// reset params
 							Nf += cur_Nf;
@@ -175,6 +177,7 @@ class CopyModel
 							cur_Nf = 0;
 							this->sequences_lookahead.clear();;
 						}
+						
 					}
 					if (this->sequences_lookahead[seq].count(next_character) < 1) {					// add newly seen character after sequence to table
 						char_data_t charInit = { 0, 0, 0 };											// with 1/2 probability
@@ -195,15 +198,6 @@ class CopyModel
 			this->expected_total_bits = this->n_bits * this->file_length;
 
 			this->exec_time =  float (clock() - this->exec_time);
-			
-			/*
-			cout << "Nh = " << Nh << endl;
-			cout << "Nf = " << Nf << endl;
-			cout << "Probability " << this->accuracy << endl;
-			cout << "Bits = " << this->n_bits << endl;
-			cout << "Expected total number of bits = " << this->expected_total_bits << endl;
-			cout << this->exec_time << " ms" << endl;
-			*/
 		}	
 
 		/**
@@ -229,7 +223,7 @@ class CopyModel
 		void export_model(string filename) {
 			ofstream out;
 
-			out.open("model");
+			out.open(filename);
 
 			for ( auto const&p : this->sequences_lookahead) {
 				string seq = p.first;
@@ -298,7 +292,7 @@ int main(int argc, char **argv) {
 
 	cp.start();
 	cp.export_run(out_file);
-	cp.export_model("model");
+	//cp.export_model("model");
 
 	return 0;
 }
